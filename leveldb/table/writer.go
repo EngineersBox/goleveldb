@@ -167,21 +167,6 @@ type Writer struct {
 func (w *Writer) writeBlock(buf *util.Buffer, compression opt.Compression) (bh blockHandle, err error) {
 	// Compress the buffer if necessary.
 	var b []byte
-	if compression == opt.SnappyCompression {
-		// Allocate scratch enough for compression and block trailer.
-		if n := snappy.MaxEncodedLen(buf.Len()) + blockTrailerLen; len(w.compressionScratch) < n {
-			w.compressionScratch = make([]byte, n)
-		}
-		compressed := snappy.Encode(w.compressionScratch, buf.Bytes())
-		n := len(compressed)
-		b = compressed[:n+blockTrailerLen]
-		b[n] = blockTypeSnappyCompression
-	} else {
-		tmp := buf.Alloc(blockTrailerLen)
-		tmp[0] = blockTypeNoCompression
-		b = buf.Bytes()
-	}
-
 	switch compression {
 	case opt.SnappyCompression:
 		// Allocate scratch enough for compression and block trailer.
