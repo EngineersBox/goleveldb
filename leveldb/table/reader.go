@@ -8,7 +8,6 @@ package table
 
 import (
 	"bytes"
-	"compress/zlib"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -27,6 +26,8 @@ import (
 	"github.com/engineersbox/goleveldb/leveldb/opt"
 	"github.com/engineersbox/goleveldb/leveldb/storage"
 	"github.com/engineersbox/goleveldb/leveldb/util"
+
+	"github.com/molon/zlib"
 )
 
 // Reader errors.
@@ -597,7 +598,20 @@ func (r *Reader) readRawBlock(bh blockHandle, verifyChecksum bool) ([]byte, erro
 		data = decData
 	case blockTypeZlibCompression:
 		byteReader := bytes.NewReader(data[:bh.length])
-		zlibReader, err := zlib.NewReader(byteReader)
+		zlibReader, err := zlib.NewReader(byteReader, 15)
+		if err != nil {
+			r.bpool.Put(data)
+			return nil, r.newErrCorruptedBH(bh, err.Error())
+		}
+		decompressedBytes, err := ioutil.ReadAll(zlibReader)
+		if err != nil {
+			r.bpool.Put(decompressedBytes)
+			return nil, r.newErrCorruptedBH(bh, err.Error())
+		}
+		data = decompressedBytes
+	case blockTypeZlibRawCompression:
+		byteReader := bytes.NewReader(data[:bh.length])
+		zlibReader, err := zlib.NewReader(byteReader, -15)
 		if err != nil {
 			r.bpool.Put(data)
 			return nil, r.newErrCorruptedBH(bh, err.Error())
