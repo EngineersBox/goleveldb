@@ -78,6 +78,10 @@ func (c Compression) String() string {
 		return "none"
 	case SnappyCompression:
 		return "snappy"
+	case ZlibCompression:
+		return "zlib"
+	case ZlibRawCompression:
+		return "zlib-raw"
 	}
 	return "invalid"
 }
@@ -87,6 +91,8 @@ const (
 	NoCompression
 	SnappyCompression
 	nCompression
+	ZlibCompression
+	ZlibRawCompression
 )
 
 // Strict is the DB 'strict level'.

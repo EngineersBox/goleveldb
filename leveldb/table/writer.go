@@ -7,6 +7,7 @@
 package table
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -18,6 +19,8 @@ import (
 	"github.com/engineersbox/goleveldb/leveldb/filter"
 	"github.com/engineersbox/goleveldb/leveldb/opt"
 	"github.com/engineersbox/goleveldb/leveldb/util"
+
+	"github.com/molon/zlib"
 )
 
 func sharedPrefixLen(a, b []byte) int {
@@ -174,6 +177,54 @@ func (w *Writer) writeBlock(buf *util.Buffer, compression opt.Compression) (bh b
 		b = compressed[:n+blockTrailerLen]
 		b[n] = blockTypeSnappyCompression
 	} else {
+		tmp := buf.Alloc(blockTrailerLen)
+		tmp[0] = blockTypeNoCompression
+		b = buf.Bytes()
+	}
+
+	switch compression {
+	case opt.SnappyCompression:
+		// Allocate scratch enough for compression and block trailer.
+		if n := snappy.MaxEncodedLen(buf.Len()) + blockTrailerLen; len(w.compressionScratch) < n {
+			w.compressionScratch = make([]byte, n)
+		}
+		compressed := snappy.Encode(w.compressionScratch, buf.Bytes())
+		n := len(compressed)
+		b = compressed[:n+blockTrailerLen]
+		b[n] = blockTypeSnappyCompression
+	case opt.ZlibCompression:
+		var compressed bytes.Buffer
+		writer, err := zlib.NewWriter(&compressed, 15)
+		if err != nil {
+			return blockHandle{}, err
+		}
+		n, err := writer.Write(buf.Bytes())
+		if err != nil {
+			return blockHandle{}, err
+		}
+		err = writer.Close()
+		if err != nil {
+			return blockHandle{}, err
+		}
+		b = compressed.Bytes()[:n+blockTrailerLen]
+		b[n] = blockTypeZlibCompression
+	case opt.ZlibRawCompression:
+		var compressed bytes.Buffer
+		writer, err := zlib.NewWriter(&compressed, -15)
+		if err != nil {
+			return blockHandle{}, err
+		}
+		n, err := writer.Write(buf.Bytes())
+		if err != nil {
+			return blockHandle{}, err
+		}
+		err = writer.Close()
+		if err != nil {
+			return blockHandle{}, err
+		}
+		b = compressed.Bytes()[:n+blockTrailerLen]
+		b[n] = blockTypeZlibRawCompression
+	default:
 		tmp := buf.Alloc(blockTrailerLen)
 		tmp[0] = blockTypeNoCompression
 		b = buf.Bytes()
